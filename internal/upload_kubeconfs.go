@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"ksiableApi/internal/helper"
+	"ksiableApi/internal/model"
 	"net/http"
 )
 
@@ -41,8 +42,13 @@ func UpKubeconfs(c *gin.Context) {
 		// 获取RawConf
 		if err := helper.MergeConf(config, filesContentsList); err == nil {
 			if kubeconfigYaml, err := helper.Serializes2Yaml(*config); err == nil {
+				c.Set("kconfig", kubeconfigYaml)
 				statusCode = http.StatusOK
-				c.JSON(statusCode, gin.H{"kubeconfigs": string(kubeconfigYaml)})
+				// 获取所有context下所有pod信息
+				podsInfoList := GetContextsPodsInfoConfbytes(*config, "All")
+				resp := model.PodsInfoAndConfig{KubeconfigYaml: string(kubeconfigYaml), PodList: podsInfoList}
+
+				c.JSON(statusCode, resp)
 				return
 			} else {
 				c.JSON(statusCode, gin.H{"msg": err})

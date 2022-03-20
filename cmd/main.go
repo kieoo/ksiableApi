@@ -3,20 +3,20 @@ package main
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"io"
 	"ksiableApi/internal"
+	"ksiableApi/internal/log"
 	"net/http"
 	"os"
 	"regexp"
 )
 
 func main() {
-	logfile, _ := os.Create("gin.log")
-	gin.DefaultWriter = io.MultiWriter(logfile, os.Stdout)
+	//logfile, _ := os.Create("gin.log")
+	//gin.DefaultWriter = io.MultiWriter(logfile, os.Stdout)
 
 	r := gin.New()
-
 	r.Use(CorsMiddleware())
+	r.Use(log.LoggerToFile())
 
 	ks := r.Group("ksiable")
 	{

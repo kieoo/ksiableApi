@@ -7,8 +7,8 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-// kubeconfigs files path list
-func buildConfig(kubeconfigBytes []byte) (*clientcmdapi.Config, error) {
+// BuildConfig kubeconf files path list
+func BuildConfig(kubeconfigBytes []byte) (*clientcmdapi.Config, error) {
 	if len(kubeconfigBytes) > 0 {
 		config, err := clientcmd.Load(kubeconfigBytes)
 		if err != nil {
@@ -43,7 +43,7 @@ func MergeConf(config *clientcmdapi.Config, kubeConfigFilesContents [][]byte) er
 		if len(fileContent) == 0 {
 			continue
 		}
-		if config, err := buildConfig(fileContent); err == nil {
+		if config, err := BuildConfig(fileContent); err == nil {
 			kubeconfigs = append(kubeconfigs, config)
 		}
 	}

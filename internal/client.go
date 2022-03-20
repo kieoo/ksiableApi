@@ -2,28 +2,48 @@ package internal
 
 import (
 	"errors"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 type Client struct {
-	RawConfBtyes []byte
-	RawConf      *clientcmdapi.Config
-	Conf         *clientcmd.ClientConfig
+	rawConfBtyes []byte
+	rawConf      *clientcmdapi.Config
+	RestConf     *rest.Config
+	Clientset    kubernetes.Clientset
 	contextName  string
 }
 
 func (cli *Client) InitClient() error {
 	// 优先使用config bytes
-	if len(cli.RawConfBtyes) > 0 {
-		conf, err := clientcmd.NewClientConfigFromBytes(cli.RawConfBtyes)
-		cli.Conf = &conf
+	if len(cli.rawConfBtyes) > 0 {
+		if conf, err := clientcmd.NewClientConfigFromBytes(cli.rawConfBtyes); err == nil {
+			if rawConf, err := conf.RawConfig(); err == nil {
+				cli.rawConf = &rawConf
+			} else {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	if cli.rawConf == nil {
+		return errors.New("raw conf is nil")
+	}
+	// raw config
+	conf := clientcmd.NewNonInteractiveClientConfig(*cli.rawConf, cli.contextName, nil, nil)
+
+	// rest config
+	cli.RestConf, _ = conf.ClientConfig()
+
+	// client set
+	if clientset, err := kubernetes.NewForConfig(cli.RestConf); err == nil {
+		cli.Clientset = *clientset
+	} else {
 		return err
 	}
-	if cli.RawConf != nil {
-		conf := clientcmd.NewNonInteractiveClientConfig(*cli.RawConf, cli.contextName, nil, nil)
-		cli.Conf = &conf
-		return nil
-	}
-	return errors.New("RawConfBytes and RawConf is nil ")
+
+	return nil
 }
