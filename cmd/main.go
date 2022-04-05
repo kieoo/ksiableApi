@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"ksiableApi/internal"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"time"
 )
 
 func main() {
@@ -15,19 +17,25 @@ func main() {
 	//gin.DefaultWriter = io.MultiWriter(logfile, os.Stdout)
 
 	r := gin.New()
-	r.Use(CorsMiddleware())
+	r.Use(corsMiddleware(), timeoutMiddleware(20))
 	r.Use(log.LoggerToFile())
+
+	r.GET("version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"msg": "1.1.1"})
+	})
 
 	ks := r.Group("ksiable")
 	{
 		ks.POST("upKubeconfs", internal.UpKubeconfs)
 		ks.POST("reloadInfo", internal.ReloadInfo)
+		ks.POST("exec", internal.Exec)
+		ks.POST("loadLog", internal.LoadLog)
 	}
 
 	r.Run(GetRunPort())
 }
 
-func CorsMiddleware() gin.HandlerFunc {
+func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		method := c.Request.Method
@@ -43,7 +51,8 @@ func CorsMiddleware() gin.HandlerFunc {
 		}
 		if isAccess {
 			// 核心处理方式
-			c.Header("Access-Control-Allow-Origin", "*")
+			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Header("Access-Control-Allow-Origin", "http://192.168.1.3:8080")
 			c.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
 			c.Header("Access-Control-Allow-Methods", "GET, OPTIONS, POST, PUT, DELETE")
 			c.Set("content-type", "application/json")
@@ -53,6 +62,31 @@ func CorsMiddleware() gin.HandlerFunc {
 			c.JSON(http.StatusOK, "Options Request!")
 		}
 
+		c.Next()
+	}
+}
+
+// timeout middleware wraps the request context with a timeout
+func timeoutMiddleware(timeout time.Duration) func(c *gin.Context) {
+	return func(c *gin.Context) {
+
+		// wrap the request context with a timeout
+		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
+
+		defer func() {
+			// check if context timeout was reached
+			if ctx.Err() == context.DeadlineExceeded {
+
+				// write response and abort the request
+				c.Writer.WriteHeader(http.StatusGatewayTimeout)
+				c.Abort()
+			}
+			//cancel to clear resources after finished
+			cancel()
+		}()
+
+		// replace request with context wrapped request
+		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }
