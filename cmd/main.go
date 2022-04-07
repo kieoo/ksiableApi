@@ -8,6 +8,7 @@ import (
 	"ksiableApi/internal/log"
 	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
 	"time"
 )
@@ -17,7 +18,7 @@ func main() {
 	//gin.DefaultWriter = io.MultiWriter(logfile, os.Stdout)
 
 	r := gin.New()
-	r.Use(corsMiddleware(), timeoutMiddleware(20))
+	r.Use(corsMiddleware())
 	r.Use(log.LoggerToFile())
 
 	r.GET("version", func(c *gin.Context) {
@@ -32,7 +33,30 @@ func main() {
 		ks.POST("loadLog", internal.LoadLog)
 	}
 
-	r.Run(GetRunPort())
+	internal.ExecInit()
+
+	srv := &http.Server{
+		Addr:    GetRunPort(),
+		Handler: r,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Logger().Infof("listen: %s\n", err)
+		}
+	}()
+
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+	log.Logger().Info("Shutdown Server ...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Logger().Infof("Server Shutdown:%s", err)
+	}
+	log.Logger().Info("Server exiting")
 }
 
 func corsMiddleware() gin.HandlerFunc {
@@ -52,7 +76,7 @@ func corsMiddleware() gin.HandlerFunc {
 		if isAccess {
 			// 核心处理方式
 			c.Header("Access-Control-Allow-Credentials", "true")
-			c.Header("Access-Control-Allow-Origin", "http://192.168.1.3:8080")
+			c.Header("Access-Control-Allow-Origin", "*")
 			c.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
 			c.Header("Access-Control-Allow-Methods", "GET, OPTIONS, POST, PUT, DELETE")
 			c.Set("content-type", "application/json")

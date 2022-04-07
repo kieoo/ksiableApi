@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 )
 
 func LoadLog(c *gin.Context) {
@@ -21,6 +22,12 @@ func LoadLog(c *gin.Context) {
 		return
 	}
 	logFilePath := req.LogDir
+
+	// 读取的exec任务还在执行, 喂狗
+	if _, ok := ExecMapRecode[req.LogDir]; ok {
+		ExecMapRecode[req.LogDir] = time.Now().Unix()
+	}
+
 	if dir, err := os.Getwd(); err == nil {
 		logFilePath = path.Join(dir, "logs", "tmp", req.LogDir)
 	}

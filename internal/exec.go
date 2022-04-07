@@ -11,12 +11,44 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+var ExecMapRecode map[string]int64
+
+func ExecInit() {
+	ExecMapRecode = make(map[string]int64)
+	go func() {
+		tick := time.Tick(1 * time.Minute)
+		exit := make(chan os.Signal)
+		signal.Notify(exit, os.Interrupt)
+	A:
+		for {
+			select {
+			case <-tick:
+				now := time.Now().Unix()
+				for execFlag, t := range ExecMapRecode {
+					// 15min 后还在执行, 却没有人在读这个任务(/loadLog 负责喂狗), 取消这个任务
+					if now-t >= 90 {
+						delete(ExecMapRecode, execFlag)
+						log.Logger().Infof("Delete exec proc %s", execFlag)
+					} else {
+						log.Logger().Infof("Running exec proc %s", execFlag)
+					}
+				}
+			case <-exit:
+				log.Logger().Info("ExecInit exit.. ")
+				break A
+			}
+		}
+		log.Logger().Info("exit..for ")
+	}()
+}
 
 func Exec(c *gin.Context) {
 	req := &model.ExecReq{}
@@ -69,13 +101,25 @@ func Exec(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"msg": fmt.Sprintf("create tmp dir err:%s", err)})
 		return
 	}
-	exe := &ExecInfo{*conf, req.ExecContainers, req.Command, tmpDir}
+	ch := make(chan struct{}, len(req.ExecContainers))
+	exe := &ExecInfo{
+		conf:       *conf,
+		containers: req.ExecContainers,
+		command:    req.Command,
+		tmpDir:     tmpDir,
+		execKey:    uniqFlag,
+		cancel:     ch,
+	}
+	// 执行任务放入队列
+	ExecMapRecode[uniqFlag] = time.Now().Unix()
 	// 异步
 	go func() {
 		// 当podName=all, 裂变owner
 		exe.FissionCon()
 		// 执行 并输出到文件夹, 等待时间1800s
 		exe.ExecCommand(1800)
+		// 执行完成, 删除队列信号
+		delete(ExecMapRecode, uniqFlag)
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"exec_log_dir": uniqFlag})
@@ -86,6 +130,8 @@ type ExecInfo struct {
 	containers []model.ContainerInfo
 	command    string
 	tmpDir     string
+	execKey    string
+	cancel     chan struct{}
 }
 
 func (e *ExecInfo) FissionCon() {
@@ -126,6 +172,10 @@ func (e *ExecInfo) FissionCon() {
 
 // ExecCommand 执行并分别写入 tmpDir/Cluster_Namespace_PodName_Container中
 func (e *ExecInfo) ExecCommand(timeout int) {
+
+	// 启动cancel时钟, 如果任务不在 ExecMapRecode中, 发送cancel信号
+	go e.Cancel()
+
 	wg := sync.WaitGroup{}
 	for _, container := range e.containers {
 		if len(container.PodName) == 0 || strings.ToUpper(container.PodName) == "ALL" {
@@ -155,18 +205,24 @@ func (e *ExecInfo) ExecCommand(timeout int) {
 				log.Logger().Warnf("ExecCommand write file:%s error:%s", f, err)
 			}
 			done := make(chan struct{})
+			// 停止exec执行
+			exCancel := make(chan int)
 			go func() {
 				err = helper.RunExec(c.RestConf, c.Clientset,
 					ca.Namespace, ca.PodName,
-					ca.ContainerName, e.command, writer)
+					ca.ContainerName, e.command, writer, exCancel)
 				done <- struct{}{}
 			}()
 
 			select {
 			case <-done:
-				log.Logger().Debugf("pod:%s, exec command: %s done", ca.PodName, e.command)
+				log.Logger().Infof("pod:%s, Done:exec command: %s", ca.PodName, e.command)
 			case <-time.After(time.Duration(timeout) * time.Second):
-				log.Logger().Debugf("pod:%s, exec command: %s timeout", ca.PodName, e.command)
+				exCancel <- 1
+				log.Logger().Infof("pod:%s, Timeout:exec command: %s", ca.PodName, e.command)
+			case <-e.cancel:
+				exCancel <- 1
+				log.Logger().Infof("pod:%s, Kill:exec command: %s", ca.PodName, e.command)
 			}
 
 			if err != nil {
@@ -185,6 +241,19 @@ func (e *ExecInfo) ExecCommand(timeout int) {
 	wg.Wait()
 	// 表示执行完成
 	succeed := path.Join(e.tmpDir, "_success")
+
 	s, _ := os.Create(succeed)
 	s.Close()
+}
+
+func (e *ExecInfo) Cancel() {
+	for {
+		if _, ok := ExecMapRecode[e.execKey]; !ok {
+			for i := 0; i < len(e.containers); i++ {
+				e.cancel <- struct{}{}
+			}
+			return
+		}
+		time.Sleep(30 * time.Second)
+	}
 }

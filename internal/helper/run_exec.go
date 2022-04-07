@@ -7,10 +7,11 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	"strings"
 )
 
 func RunExec(config *rest.Config, clientset kubernetes.Clientset, ns string,
-	pod string, container string, command string, out io.Writer) error {
+	pod string, container string, command string, out io.Writer, cancel chan int) error {
 
 	cmd := []string{"sh", "-c", command}
 
@@ -26,10 +27,10 @@ func RunExec(config *rest.Config, clientset kubernetes.Clientset, ns string,
 		&v1.PodExecOptions{
 			Container: container,
 			Command:   cmd,
-			Stdin:     false,
+			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
-			TTY:       false,
+			TTY:       true,
 		}, scheme.ParameterCodec,
 	)
 
@@ -37,14 +38,27 @@ func RunExec(config *rest.Config, clientset kubernetes.Clientset, ns string,
 	if err != nil {
 		return err
 	}
-	err = exec.Stream(remotecommand.StreamOptions{
-		Stdin:  nil,
-		Stdout: out,
-		Stderr: out,
-	})
 
-	if err != nil {
+	done := make(chan struct{})
+
+	go func() {
+		err = exec.Stream(remotecommand.StreamOptions{
+			Stdin:  strings.NewReader(command),
+			Stdout: out,
+			Stderr: out,
+		})
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
 		return err
+	case <-cancel:
+		exec.Stream(remotecommand.StreamOptions{
+			Stdin:  strings.NewReader("\\003"),
+			Stdout: out,
+			Stderr: out,
+		})
 	}
 
 	return nil
