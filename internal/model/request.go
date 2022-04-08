@@ -11,6 +11,7 @@ type ExecReq struct {
 	KubeConfBytes       []byte          `json:"kube_conf_bytes,omitempty"`
 	ExecContainers      []ContainerInfo `json:"containers" binding:"required"`
 	Command             string          `json:"command" binding:"required"`
+	AcceptKill          bool            `json:"accept_kill,omitempty"`
 }
 
 type LoadLog struct {

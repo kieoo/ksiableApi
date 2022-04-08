@@ -33,8 +33,8 @@ func ExecInit() {
 			case <-tick:
 				now := time.Now().Unix()
 				for execFlag, t := range ExecMapRecode {
-					// 15min 后还在执行, 却没有人在读这个任务(/loadLog 负责喂狗), 取消这个任务
-					if now-t >= 90 {
+					// 3min 后还在执行, 却没有人在读这个任务(/loadLog 负责喂狗), 取消这个任务
+					if now-t >= 180 {
 						delete(ExecMapRecode, execFlag)
 						log.Logger().Infof("Delete exec proc %s", execFlag)
 					} else {
@@ -81,6 +81,11 @@ func Exec(c *gin.Context) {
 
 	if len(req.Command) <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"msg": fmt.Sprintf("check your command")})
+		return
+	}
+
+	if strings.Contains(req.Command, "kill") && !req.AcceptKill {
+		c.JSON(http.StatusBadRequest, gin.H{"msg": fmt.Sprintf("check your command dangerous - kill")})
 		return
 	}
 
@@ -210,7 +215,7 @@ func (e *ExecInfo) ExecCommand(timeout int) {
 			go func() {
 				err = helper.RunExec(c.RestConf, c.Clientset,
 					ca.Namespace, ca.PodName,
-					ca.ContainerName, e.command, writer, exCancel)
+					ca.ContainerName, e.execKey, e.command, writer, exCancel)
 				done <- struct{}{}
 			}()
 
@@ -254,6 +259,7 @@ func (e *ExecInfo) Cancel() {
 			}
 			return
 		}
-		time.Sleep(30 * time.Second)
+		// 5s 检查一次执行队列是否需要删除
+		time.Sleep(5 * time.Second)
 	}
 }

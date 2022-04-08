@@ -9,7 +9,7 @@ type PodsInfo struct {
 type Pod struct {
 	Ns                 string   `json:"namespace"`
 	OwnerReferenceName string   `json:"owner,omitempty"`
-	PodNames           []string `json:"pod_name"`
+	PodNames           []string `json:"pod_names"`
 	Containers         []string `json:"containers"`
 }
 
