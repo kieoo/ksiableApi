@@ -31,6 +31,7 @@ func main() {
 		ks.POST("reloadInfo", internal.ReloadInfo)
 		ks.POST("exec", internal.Exec)
 		ks.POST("loadLog", internal.LoadLog)
+		ks.POST("cancelLog", internal.CancelLoad)
 	}
 
 	internal.ExecInit()

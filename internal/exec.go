@@ -84,9 +84,13 @@ func Exec(c *gin.Context) {
 		return
 	}
 
-	if strings.Contains(req.Command, "kill") && !req.AcceptKill {
-		c.JSON(http.StatusBadRequest, gin.H{"msg": fmt.Sprintf("check your command dangerous - kill")})
-		return
+	if (strings.Contains(req.Command, "kill") || strings.Contains(req.Command, "rm ")) &&
+		!req.AcceptKill {
+		if !req.AcceptKill {
+			c.JSON(http.StatusBadRequest, gin.H{"msg": fmt.Sprintf("Dangerous  Operation - kill, rm...")})
+			return
+		}
+		log.Logger().Infof("Exec kill user:%s, command:%s", req.KubeConfBytes, req.Command)
 	}
 
 	t := time.Now().UnixNano()
@@ -204,7 +208,9 @@ func (e *ExecInfo) ExecCommand(timeout int) {
 			if err != nil {
 				log.Logger().Warnf("ExecCommand file creat error:%s", err)
 			}
-			title := ca.ClusterName + "__" + ca.Namespace + "__" + ca.PodName + "__" + ca.ContainerName + "========>\n"
+			title := "# <===FROM==== " +
+				ca.ClusterName + "__" + ca.Namespace + "__" + ca.PodName + "__" + ca.ContainerName +
+				" ========>\n"
 			_, err = writer.WriteString(title)
 			if err != nil {
 				log.Logger().Warnf("ExecCommand write file:%s error:%s", f, err)
@@ -260,6 +266,6 @@ func (e *ExecInfo) Cancel() {
 			return
 		}
 		// 5s 检查一次执行队列是否需要删除
-		time.Sleep(5 * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 }

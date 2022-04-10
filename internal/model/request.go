@@ -16,7 +16,7 @@ type ExecReq struct {
 
 type LoadLog struct {
 	LogDir   string   `json:"exec_log_dir" bidding:"required"`
-	Running  []string `json:"running,omitempty"`
-	Finished []string `json:"finished,omitempty" `
-	Read     []string `json:"read,omitempty" `
+	Running  []string `json:"running,omitempty"`   // 在执行的文件
+	Finished []string `json:"finished,omitempty" ` // 读取的文件
+	Read     []string `json:"read,omitempty" `     // 已完成读取的文件
 }

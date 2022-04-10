@@ -102,3 +102,18 @@ func LoadLog(c *gin.Context) {
 
 	return
 }
+
+func CancelLoad(c *gin.Context) {
+	req := &model.LoadLog{}
+	err := c.BindJSON(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"msg": fmt.Sprintf("Load failure:%s", err)})
+		return
+	}
+
+	// 读取的exec任务还在执行, 杀掉
+	if _, ok := ExecMapRecode[req.LogDir]; ok {
+		delete(ExecMapRecode, req.LogDir)
+	}
+	c.JSON(http.StatusOK, gin.H{"log": req.LogDir, "msg": "killed"})
+}
