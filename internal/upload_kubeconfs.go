@@ -58,7 +58,7 @@ func UpKubeconfs(c *gin.Context) {
 					KubeconfigYamlBase64: kubeconfigBase64,
 					PodList:              podsInfoList,
 				}
-				c.SetCookie("kube_config_yaml_base64", kubeconfigBase64, 7200, "/", "192.168.1.3", false, false)
+				c.SetCookie("kube_config_yaml_base64", kubeconfigBase64, 7200, "/", "/", false, false)
 				c.JSON(statusCode, resp)
 				return
 			} else {
