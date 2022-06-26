@@ -39,7 +39,7 @@ func RunExec(config *rest.Config, clientset kubernetes.Clientset, ns string,
 		return err
 	}
 
-	done := make(chan struct{})
+	done := make(chan struct{}, 1)
 
 	go func() {
 		err = exec.Stream(remotecommand.StreamOptions{

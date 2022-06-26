@@ -215,7 +215,7 @@ func (e *ExecInfo) ExecCommand(timeout int) {
 			if err != nil {
 				log.Logger().Warnf("ExecCommand write file:%s error:%s", f, err)
 			}
-			done := make(chan struct{})
+			done := make(chan struct{}, 1)
 			// 停止exec执行
 			exCancel := make(chan int)
 			go func() {
