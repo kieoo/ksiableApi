@@ -10,6 +10,7 @@ import (
 	"ksiableApi/internal/log"
 	"ksiableApi/internal/model"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -63,7 +64,9 @@ func GetContextsPodsInfoConfbytes(conf clientcmdapi.Config, contextName string, 
 				log.Logger().Warnf("GetContextsPodsInfo clientset creat error:%s", err)
 				continue
 			}
-			podsInfo := &model.PodsInfo{Context: name, Cluster: context.Cluster}
+			// cluster 带"/" 会影响前端处理, 前端以"/"分割cluster/ns/pod
+			cleanClusterName := strings.ReplaceAll(context.Cluster, "/", "#")
+			podsInfo := &model.PodsInfo{Context: name, Cluster: cleanClusterName}
 			wg.Add(1)
 			go func(clientset kubernetes.Clientset, podsInfo *model.PodsInfo) {
 				defer wg.Done()
