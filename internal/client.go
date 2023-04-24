@@ -35,8 +35,13 @@ func (cli *Client) InitClient() error {
 	// raw config
 	conf := clientcmd.NewNonInteractiveClientConfig(*cli.rawConf, cli.contextName, nil, nil)
 
+	var err error
 	// rest config
-	cli.RestConf, _ = conf.ClientConfig()
+	cli.RestConf, err = conf.ClientConfig()
+
+	if err != nil {
+		return err
+	}
 
 	// client set
 	if clientset, err := kubernetes.NewForConfig(cli.RestConf); err == nil {
